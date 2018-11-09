@@ -3,18 +3,18 @@
 This project contains a collection of miscellaneous utilities meant to ease the process of working with PropBank data.
 
 ## Convert PropBank to CoNLL 2005
-PropBank annotations are often distributed as standoff ".prop" annotations which point to locations in separately distributed
-parse trees. Given that you have access to the TreeBank parse trees and ".prop" standoff annotations, this script converts
-the PropBank annotations into the more manageable CoNLL 2005 format.
+PropBank annotations are often distributed as standoff `.prop` annotations which point to nodes in separately distributed
+parse trees. Given that you have access to the TreeBank parse trees and `.prop` standoff annotations, this script converts
+the PropBank annotations into the significantly more manageable CoNLL 2005 format.
 
 To use this script, you'll first need to install the Perl modules necessary to run 'link_tbpb.pl', provided by the official
 [CoNLL 2005 Shared Task homepage](http://www.lsi.upc.edu/~srlconll/soft.html#srlconll). The process is described in the
 README file packaged with [srlconll-1.1.tgz](http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz).
 
-`pb_to_conll.py`
+`pb2conll.py`
 
 ```
-usage: pb_to_conll.py [-h] --pb PB --tb TB [--script SCRIPT]
+usage: pb2conll.py [-h] --pb PB --tb TB [--script SCRIPT]
                       [--include-inputs] [--o O] [--combined COMBINED]
                       [--filter FILTER]
 
