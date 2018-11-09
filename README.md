@@ -12,9 +12,8 @@ To use this script, you'll first need to install the Perl modules necessary to r
 README file packaged with [srlconll-1.1.tgz](http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz).
 
 ```
-usage: pb2conll.py [-h] --pb PB --tb TB [--script SCRIPT]
-                      [--include-inputs] [--o O] [--combined COMBINED]
-                      [--filter FILTER]
+usage: pb2conll.py [-h] --pb PB --tb TB [--script SCRIPT] [--include-inputs]
+                   [--o O] [--combined COMBINED] [--filter FILTER] [--all]
 
 Convert PropBank pointer files to the official CoNLL-2005 format.
 
@@ -29,4 +28,6 @@ optional arguments:
   --combined COMBINED  (optional) combined output path
   --filter FILTER      (optional) path regex filter, e.g.
                        ".*WSJ/(0[2-9]|1[0-9]|2[01])/.*"
+  --all                include all role labels instead of filtering out
+                       unexpected ones
 ```
