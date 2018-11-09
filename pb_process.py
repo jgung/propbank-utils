@@ -11,7 +11,7 @@ SENSE_FIELD = 4
 ROLE_START = 6
 
 PB_CORE_ARGS = "-ARG[^M]|\d-\s| -by"  # filter out props with core PB args, missing args, or typos
-SEMLINK_PB_TO_VN = "^(\S+\s+\S+\s+\S+\s+\S+\s+)(\S+?)\.[^;]+;VN=(\S+)"
+SEMLINK_PB_TO_VN = "^((?:\S+\s+){4})(\S+?)\.[^;]+;VN=(\S+)"
 SEMLINK_PB_TO_VN_REPL = r"\1\2.\3"
 
 ROLE = "^\S+:\d+-(\S+)$"
