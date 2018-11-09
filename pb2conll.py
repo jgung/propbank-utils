@@ -114,9 +114,14 @@ def main():
     _opts = options()
     _props_by_path = _separate_props_by_file(_opts.pb)
     path_filter = None
+
     if _opts.filter:
         pattern = re.compile('^' + _opts.filter + '$', re.IGNORECASE)
-        path_filter = lambda x: bool(pattern.match(x))
+
+        def filter_func(pathstr):
+            return bool(pattern.match(pathstr))
+
+        path_filter = filter_func
 
     link_treebank_propbank(_props_by_path, treebank_dir=_opts.tb, script_path=_opts.script, output_dir=_opts.o,
                            combined=_opts.combined, noi=_opts.noi, path_filter=path_filter, all_roles=_opts.all)
