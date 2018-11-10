@@ -111,6 +111,8 @@ def clean_roles(roles):
             return None
         role_part = role_search.group(1)
         cleaned = re.sub(CLEAN_ROLE, r"\1", role_part)
+        if cleaned == "announcement":  # erroneous mapping in Semlink 1.0/1.1
+            return "Topic"
         if cleaned.startswith("ARGM-"):
             if cleaned == "ARGM-TM":
                 cleaned = "ARGM-TMP"
@@ -175,7 +177,7 @@ def options():
     parser = argparse.ArgumentParser(description="Utility for sorting, filtering, and transforming PropBank pointers.")
     parser.add_argument('--pb', type=str, required=True, help='PropBank pointers file')
     parser.add_argument('--o', type=str, help='(optional) output path')
-    parser.add_argument('--filter', type=str, help='(optional) pointer regex filter, e.g. "-ARG[^M\d]" removes any pointers '
+    parser.add_argument('--filter', type=str, help='(optional) pointer regex filter, e.g. "-ARG[^M]" removes any pointers '
                                                    'containing core PB arguments')
     parser.add_argument('--search', type=str, help='(optional) pointer regex search for mapping')
     parser.add_argument('--replace', type=str, help='(optional) pointer replacement regex for mapping')
