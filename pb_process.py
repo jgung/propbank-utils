@@ -148,7 +148,7 @@ def map_props(props, search_pattern, search_repl_pattern):
     return result
 
 
-def map_roles_semlink(props, roleset_mappings, filter_incomplete=True):
+def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, vn=True):
     result = []
     for prop in props:
         vnmappings = roleset_mappings.get(prop.predicate)
@@ -172,8 +172,11 @@ def map_roles_semlink(props, roleset_mappings, filter_incomplete=True):
                     if filter_incomplete:
                         complete = False
                         break
-                role.label = mapped_role
+                if vn:
+                    role.label = mapped_role
         if complete:
+            if vn:
+                prop.predicate = vnmapping.lemma + '.' + vnmapping.vncls
             result.append(prop)
 
     return result
@@ -361,7 +364,7 @@ def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern
     props = process_predicates(props, lambda pred: map_predicate(pred, search_pattern, search_repl_pattern))
 
     if semlink_mappings:
-        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete)
+        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete, vn=vn)
 
     props = sort_props(props, sort_cols)
 

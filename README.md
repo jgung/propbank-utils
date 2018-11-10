@@ -2,6 +2,9 @@
 
 This project contains a collection of miscellaneous utilities meant to ease the process of working with PropBank data.
 
+No guarantees are made about the correctness/stability of said utilities (you definitely won't find any unit tests),
+most having grown organically out of my own research needs.
+
 ## Convert PropBank to CoNLL 2005 (pb2conll.py)
 PropBank annotations are often distributed as standoff `.prop` annotations which point to nodes in separately distributed
 parse trees. Given that you have access to the TreeBank parse trees and `.prop` standoff annotations, `pb2conll.py` converts
