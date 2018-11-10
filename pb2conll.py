@@ -95,7 +95,7 @@ def options():
     parser = argparse.ArgumentParser(description="Convert PropBank pointer files to the official CoNLL-2005 format.")
     parser.add_argument('--pb', type=str, required=True, help='PropBank pointers file')
     parser.add_argument('--tb', type=str, required=True, help='TreeBank root directory, e.g. treebank_3/parsed/mrg')
-    parser.add_argument('--script', type=str, default='srlconll-1.1/bin/link_tbpb.pl', help='link_tbpb.pl official script')
+    parser.add_argument('--script', type=str, default='scripts/link_tbpb_vn.pl', help='link_tbpb.pl official script')
     parser.add_argument('--include-inputs', dest='noi', action='store_false',
                         help='include input tokens in output (opposite of -noi in original script)')
     parser.add_argument('--o', type=str, help='(optional) CoNLL output base directory')

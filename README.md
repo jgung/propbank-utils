@@ -8,8 +8,9 @@ parse trees. Given that you have access to the TreeBank parse trees and `.prop` 
 the PropBank annotations into the significantly more manageable CoNLL 2005 format.
 
 To use this script, you'll first need to install the Perl modules necessary to run 'link_tbpb.pl', provided by the official
-[CoNLL 2005 Shared Task homepage](http://www.lsi.upc.edu/~srlconll/soft.html#srlconll). The process is described in the
-README file packaged with [srlconll-1.1.tgz](http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz).
+[CoNLL 2005 Shared Task homepage](http://www.lsi.upc.edu/~srlconll/soft.html#srlconll).
+Note, a slightly modified version of this script has been included to facilitate processing sense tags other than PB rolesets.
+The process is described in the README file packaged with [srlconll-1.1.tgz](http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz).
 
 ```
 usage: pb2conll.py [-h] --pb PB --tb TB [--script SCRIPT] [--include-inputs]

@@ -6,5 +6,5 @@
 /dist/
 # Python egg metadata, regenerated from source files by setuptools.
 /*.egg-info
-semlink1.1*
+semlink1.*
 srlconll-1.1*

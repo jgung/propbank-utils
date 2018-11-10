@@ -32,7 +32,7 @@ checkdownload() {
 checkdownload srlconll-1.1.tgz http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz
 checkdownload semlink1.1.tar.gz https://verbs.colorado.edu/semlink/versions/semlink1.1.tar.gz
 
-SCRIPT_PATH="srlconll-1.1/bin/link_tbpb.pl"
+SCRIPT_PATH="scripts/link_tbpb_vn.pl"
 
 python pb_process.py --pb semlink1.1/vn-pb/vnprop.txt --semlink --sort-columns 4,0,1,2 --o semlink1.1/vnprop.txt
 echo "Saving training data to semlink1.1/vn-train.txt"
