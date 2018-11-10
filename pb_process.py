@@ -1,21 +1,29 @@
 import argparse
+import logging
 import re
 from collections import Counter, defaultdict
 from xml.dom import minidom
 
 import sys
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 SENTENCE_FIELD = 1
 TOKEN_FIELD = 2
-SENSE_FIELD = 4
 ROLE_START = 6
 
-PB_CORE_ARGS = "-ARG[^M]|\d-\s| -by"  # filter out props with core PB args, missing args, or typos
-SEMLINK_PB_TO_VN = "^((?:\S+\s+){4})(\S+?)\.[^;]+;VN=(\S+)"
-SEMLINK_PB_TO_VN_REPL = r"\1\2.\3"
+PB_CORE_ARGS = "ARG[^M]"  # filter out props with core PB args, missing args, or typos
 
-ROLE = "^\S+:\d+-(\S+)$"
-CLEAN_ROLE = "^(ARGM-[a-zA-Z0-9]+|[a-zA-Z0-9]+).*$"
+SEMLINK_PB_TO_VN = "^(\S+?)\.([^;]+);VN=(\S+)"  # extract VN sense and lemma from sense, e.g. "say.01;VN=37.7"
+SEMLINK_TO_VN = r"\1.\3"  # replace original sense with VerbNet sense, like "say.37.7"
+SEMLINK_TO_PB = r"\1.\2"  # replace original sense with PropBank sense, like "say.01"
+
+ROLE = "^(\S+:\d+)-(\S+)$"  # label from full role annotation, e.g. 0:2*15:0-ARG1-to --> ARG1-to
+CLEAN_ROLE = "^(ARGM-[a-zA-Z0-9]+|([a-zA-Z0-9]+)(?:\[([^\]]+)\])?).*$"  # e.g. ARG1-to --> ARG1, ARG1[Theme]-from --> ARG1[Theme]
+BRACKET_SPACE = "\[\s+\]|(?<=\[)\s+|\s+(?=\])"  # clean up extra whitespace within bracketed mapped VN roles
+
+CLEAN_MAPPING_ERRORS = " -by"  # 16:1-Agent -by --> 16:1-Agent-by
 
 
 def write_counts(outpath, counts):
@@ -30,7 +38,7 @@ def write_counts(outpath, counts):
 class PropStats(object):
     def __init__(self, props):
         super(PropStats, self).__init__()
-        self.props = [prop.split() for prop in props]
+        self.props = props
         self.lemmas = Counter()
         self.predicates = Counter()
         self.roles = Counter()
@@ -39,21 +47,40 @@ class PropStats(object):
 
     def _count(self):
         for prop in self.props:
-            predicate = prop[SENSE_FIELD]
+            predicate = prop.predicate
             separator_index = predicate.index(".")
             lemma, sense = predicate[:separator_index], predicate[separator_index + 1:]
             self.lemmas[lemma] += 1
             self.predicates[predicate] += 1
             self.senses[sense] += 1
-            for role in prop[ROLE_START:]:
-                role = re.sub(ROLE, r"\1", role)
-                self.roles[role] += 1
+            for role in prop.roles:
+                self.roles[role.label] += 1
 
     def write_all(self, outpath):
         write_counts(outpath + '.lemmas.txt', self.lemmas)
         write_counts(outpath + '.preds.txt', self.predicates)
         write_counts(outpath + '.roles.txt', self.roles)
         write_counts(outpath + '.senses.txt', self.senses)
+
+
+class Proposition(object):
+    def __init__(self, proppath, sentence, token, annotator, predicate, atts, roles):
+        super(Proposition, self).__init__()
+        self.proppath = proppath
+        self.sentence = int(sentence)
+        self.token = int(token)
+        self.annotator = annotator
+        self.predicate = predicate
+        self.atts = atts
+        self.roles = roles
+        self.cols = [proppath, self.sentence, self.token, annotator, predicate]
+
+
+class Role(object):
+    def __init__(self, pointer, label):
+        super(Role, self).__init__()
+        self.pointer = pointer
+        self.label = label
 
 
 class VnMapping(object):
@@ -98,31 +125,6 @@ def read_mappings_xml(mappings_xml):
     return roleset_map
 
 
-def clean_roles(roles):
-    result = []
-    for role in roles:
-        if not role.strip():
-            result.append(role)
-            continue
-        role_search = re.search(ROLE, role, re.IGNORECASE)
-        if not role_search:
-            print('Unexpected role format: %s' % role)
-            result.append(role)
-            return None
-        role_part = role_search.group(1)
-        cleaned = re.sub(CLEAN_ROLE, r"\1", role_part)
-        if cleaned == "announcement":  # erroneous mapping in Semlink 1.0/1.1
-            return "Topic"
-        if cleaned.startswith("ARGM-"):
-            if cleaned == "ARGM-TM":
-                cleaned = "ARGM-TMP"
-            if len(cleaned) != 8:
-                print('Unexpected ARGM-* role: %s' % cleaned)
-                return None
-        result.append(role.replace(role_part, cleaned))
-    return result
-
-
 def filter_props(props, filter_pattern):
     pattern = re.compile(filter_pattern)
     result = []
@@ -140,54 +142,204 @@ def map_props(props, search_pattern, search_repl_pattern):
     return result
 
 
-def transform_props(propspath, outpath=None, filter_pattern=None, search_pattern=None, search_repl_pattern=None,
-                    sort_cols=None):
-    if not outpath:
-        outpath = propspath + '.out'
+def read_props(propspath):
+    result = []
+    skipped = []
+    with open(propspath) as f:
+        for prop in f:
+            prop = _preprocess_prop(prop)
+            if not prop:
+                continue
+            fields = prop.split()
+            if not len(fields) > 6:
+                raise ValueError('Unexpected number of fields (%d vs. 6): %s' % (len(fields), f))
 
-    original = []
-    with open(propspath) as props:
-        for prop in props:
-            if prop:
-                fields = re.split(r'(\s+)', prop)  # preserve whitespace
-                roles = clean_roles(fields[ROLE_START * 2:])
-                if not roles:  # formatting error
-                    continue
-                original.append(fields[:ROLE_START * 2] + roles)
-    if sort_cols:
-        original = sorted(original,
-                          key=lambda x: tuple(int(x[col * 2]) if col == SENTENCE_FIELD or col == TOKEN_FIELD else x[col * 2]
-                                              for col in sort_cols))
-    result = [''.join(prop) for prop in original]
-    if filter_pattern:
-        result = filter_props(result, filter_pattern=filter_pattern)
-    if search_pattern and search_repl_pattern:
-        result = map_props(result, search_pattern=search_pattern, search_repl_pattern=search_repl_pattern)
-    print('Processed %d props, removed %d (%d remaining)' % (len(original), len(original) - len(result), len(result)))
+            roles = []
+            for rolestr in fields[ROLE_START:]:
+                role = _read_role(rolestr)
+                if role:
+                    roles.append(role)
+            if len(roles) != len(fields[ROLE_START:]):
+                skipped.append(prop)
+                continue
 
-    prop_stats = PropStats(result)
-    prop_stats.write_all(outpath)
+            result.append(Proposition(*fields[:ROLE_START], roles))
+    if skipped:
+        if logger.level == logging.DEBUG:
+            logger.debug("Skipping %d props:\n\n%s\n" % (len(skipped), '\n'.join(skipped)))
+        logger.warning('Skipping %d props due to invalid role formats' % len(skipped))
 
-    with open(outpath, mode='wt') as out:
-        out.writelines(result)
     return result
+
+
+def _preprocess_prop(prop):
+    prop = prop.strip()
+    prop = re.sub(CLEAN_MAPPING_ERRORS, "", prop)
+    prop = re.sub(BRACKET_SPACE, "", prop)  # remove whitespace that shouldn't be there, e.g. 5:1-ARG1[ ] --> ARG1[]
+    return prop
+
+
+def _read_role(rolestr):
+    role_search = re.search(ROLE, rolestr, re.IGNORECASE)
+    if not role_search:
+        logger.warning('Unexpected role format: %s' % rolestr)
+        return None
+    return Role(role_search.group(1), role_search.group(2))
+
+
+def sort_props(props, sort_cols):
+    if not sort_cols:
+        return props
+
+    def sort_tuple(prop):
+        return tuple(prop.cols[col] if col == SENTENCE_FIELD or col == TOKEN_FIELD else prop.cols[col] for col in sort_cols)
+
+    return sorted(props, key=sort_tuple)
+
+
+def filter_role_labels(props, filter_fn):
+    result = []
+    for prop in props:
+        if filter_fn(prop.roles):
+            continue
+        result.append(prop)
+    return result
+
+
+def process_roles(props, process_fn):
+    result = []
+    skipped = []
+    for prop in props:
+        if not process_fn(prop.roles):
+            skipped.append(prop)
+            continue
+        result.append(prop)
+    if skipped:
+        if logger.level == logging.DEBUG:
+            logger.debug("Filtering out %d props:\n\n%s\n" % (len(skipped), '\n'.join(format_props(skipped))))
+        logger.warning('Filtered out %d props' % len(skipped))
+    return result
+
+
+def process_predicates(props, process_fn):
+    result = []
+    skipped = []
+    for prop in props:
+        prop.predicate = process_fn(prop.predicate)
+        if not prop.predicate:
+            skipped.append(prop)
+            continue
+        result.append(prop)
+    if skipped:
+        if logger.level == logging.DEBUG:
+            logger.debug("Filtering out %d props:\n\n%s\n" % (len(skipped), '\n'.join(format_props(skipped))))
+        logger.warning('Filtered out %d props' % len(skipped))
+    return result
+
+
+def map_predicate(predicate, search, replace):
+    return re.sub(search, replace, predicate)
+
+
+def clean_role_labels(roles):
+    for role in roles:
+        match = re.search(CLEAN_ROLE, role.label)
+        cleaned = match.group(1)
+        cleaned = cleaned.strip()
+        if not cleaned:
+            logger.warning('Unexpected role format: %s' % role.label)
+            return False
+        role.label = cleaned
+    return True
+
+
+def fix_semlink_errors(roles):
+    for role in roles:
+        label = role.label
+        if label == "announcement":  # erroneous mapping in Semlink 1.0/1.1
+            label = "Topic"
+        elif label.startswith("ARGM-"):
+            if label == "ARGM-TM":
+                label = "ARGM-TMP"
+            if len(label) != 8:
+                logger.warning('Unexpected ARGM-* role: %s' % label)
+                return False
+        role.label = label
+    return True
+
+
+def extract_semlink_roles(roles, vn, filter_incomplete):
+    all_mapped = True
+    for role in roles:
+        match = re.search(CLEAN_ROLE, role.label)
+        if not match.group(3) and bool(re.search(PB_CORE_ARGS, role.label)):
+            all_mapped = False
+        if match.group(3):
+            if vn:
+                role.label = match.group(3)  # e.g. "ARG1[Theme]" --> "Theme"
+            else:
+                role.label = match.group(2)  # e.g. "ARG1[Theme]" --> "ARG1"
+    return not filter_incomplete or all_mapped
+
+
+def format_props(props):
+    if not props:
+        return []
+    path_len = len(max(props, key=lambda p: len(p.proppath)).proppath)
+    anns_len = len(max(props, key=lambda p: len(p.annotator)).annotator)
+    pred_len = len(max(props, key=lambda p: len(p.predicate)).predicate)
+    atts_len = len(max(props, key=lambda p: len(p.atts)).atts)
+
+    result = []
+    for prop in props:
+        roles = ' '.join(['{}-{}'.format(role.pointer, role.label) for role in prop.roles])
+        result.append('{:{path_len}} {:4d} {:4d} {:{ann_len}} {:{pred_len}} {:{att_len}} {}'.format(
+            prop.proppath, prop.sentence, prop.token, prop.annotator, prop.predicate, prop.atts, roles,
+            path_len=path_len, ann_len=anns_len, pred_len=pred_len, att_len=atts_len))
+    return result
+
+
+def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern=None, sort_cols=None, vn=False,
+                    filter_incomplete=False):
+    props = read_props(propspath)
+    logger.info('Read %d props' % len(props))
+
+    props = sort_props(props, sort_cols)
+    props = process_roles(props, clean_role_labels)
+    props = process_roles(props, lambda roles: extract_semlink_roles(roles, vn, filter_incomplete))
+    props = process_roles(props, fix_semlink_errors)
+    props = process_predicates(props, lambda pred: map_predicate(pred, search_pattern, search_repl_pattern))
+    props = sort_props(props, sort_cols)
+
+    PropStats(props).write_all(outpath)
+    with open(outpath, mode='wt') as out:
+        formatted = format_props(props)
+        for prop in formatted:
+            out.write(prop + '\n')
+
+    logger.info('Wrote %d props to %s' % (len(props), outpath))
+    return props
 
 
 def options():
     parser = argparse.ArgumentParser(description="Utility for sorting, filtering, and transforming PropBank pointers.")
     parser.add_argument('--pb', type=str, required=True, help='PropBank pointers file')
     parser.add_argument('--o', type=str, help='(optional) output path')
-    parser.add_argument('--filter', type=str, help='(optional) pointer regex filter, e.g. "-ARG[^M]" removes any pointers '
-                                                   'containing core PB arguments')
     parser.add_argument('--search', type=str, help='(optional) pointer regex search for mapping')
     parser.add_argument('--replace', type=str, help='(optional) pointer replacement regex for mapping')
     parser.add_argument('--sort-columns', default="0,1,2", dest='sort_cols', type=str,
                         help='(optional) comma-separated column indices in props to sort by (e.g. "4,0,1" to sort first by '
                              'sense, then by path and sentence)')
     parser.add_argument('--semlink', action='store_true',
-                        help='use default settings for processing SemLink data (remove pointers '
-                             'with PropBank core arguments, change senses to VN)')
+                        help='use default settings for processing SemLink data (remove pointers with PropBank core arguments, '
+                             'change senses to VN)')
+    parser.add_argument('--filter-incomplete', dest='filter_incomplete',
+                        action='store_true', help='Filter any incompletely mapped propositions in SemLink')
+    parser.add_argument('--vn', action='store_true', help='For SemLink vnbpprop.txt, extract VN roles')
+    parser.add_argument('--level', default='INFO', help='Logging level (e.g. INFO, DEBUG, etc.)')
     parser.set_defaults(semlink=False)
+    parser.set_defaults(vn=False)
+    parser.set_defaults(filter_incomplete=False)
 
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
@@ -197,19 +349,26 @@ def options():
 
 def main():
     _opts = options()
-    filter_pattern = _opts.filter
+
+    logger.level = getattr(logging, _opts.level.upper(), 10)
+
     search_pattern = _opts.search
     replace_pattern = _opts.replace
     if _opts.semlink:
-        if not filter_pattern:
-            filter_pattern = PB_CORE_ARGS
         if not search_pattern:
             search_pattern = SEMLINK_PB_TO_VN
         if not replace_pattern:
-            replace_pattern = SEMLINK_PB_TO_VN_REPL
+            if _opts.vn:
+                replace_pattern = SEMLINK_TO_VN
+            else:
+                replace_pattern = SEMLINK_TO_PB
+
     sort_cols = [int(col) for col in _opts.sort_cols.split(',')]
-    transform_props(_opts.pb, outpath=_opts.o, filter_pattern=filter_pattern, search_pattern=search_pattern,
-                    search_repl_pattern=replace_pattern, sort_cols=sort_cols)
+    if not _opts.o:
+        _opts.o = _opts.pb + '.out'
+    transform_props(_opts.pb, outpath=_opts.o, search_pattern=search_pattern,
+                    search_repl_pattern=replace_pattern, sort_cols=sort_cols, vn=_opts.vn,
+                    filter_incomplete=_opts.filter_incomplete)
 
 
 if __name__ == '__main__':
