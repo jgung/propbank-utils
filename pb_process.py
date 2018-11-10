@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import re
 from collections import Counter, defaultdict
@@ -13,7 +14,7 @@ SENTENCE_FIELD = 1
 TOKEN_FIELD = 2
 ROLE_START = 6
 
-PB_CORE_ARGS = "ARG[^M]"  # filter out props with core PB args, missing args, or typos
+PB_CORE_ARGS = "ARG([^M])"  # filter out props with core PB args, missing args, or typos
 
 SEMLINK_PB_TO_VN = "^(\S+?)\.([^;]+);VN=(\S+)"  # extract VN sense and lemma from sense, e.g. "say.01;VN=37.7"
 SEMLINK_TO_VN = r"\1.\3"  # replace original sense with VerbNet sense, like "say.37.7"
@@ -92,6 +93,11 @@ class VnMapping(object):
         self.rolemap = rolemap
 
 
+def read_role_mappings_json(mappings_json):
+    with open(mappings_json) as mappings:
+        return json.loads(mappings.read())
+
+
 def read_mappings_xml(mappings_xml):
     """
     Generate a mapping dictionary from rolesets to lists of VnMapping objects.
@@ -139,6 +145,37 @@ def map_props(props, search_pattern, search_repl_pattern):
     result = []
     for prop in props:
         result.append(re.sub(search_pattern, search_repl_pattern, prop))
+    return result
+
+
+def map_roles_semlink(props, roleset_mappings, filter_incomplete=True):
+    result = []
+    for prop in props:
+        vnmappings = roleset_mappings.get(prop.predicate)
+        if filter_incomplete and not vnmappings:
+            continue
+
+        if len(vnmappings) != 1:
+            logger.warning("Non-deterministic mapping for %s" % prop.predicate)
+            continue
+        vnmapping = vnmappings[0]
+
+        complete = True
+        for role in prop.roles:
+            role_mappings = vnmapping.rolemap
+
+            match = re.search(PB_CORE_ARGS, role.label)
+            if match and match.group(1):
+                mapped_role = role_mappings.get(match.group(1))
+                if not mapped_role:
+                    logger.warning("No mapping for %s %s" % (prop.predicate, role.label))
+                    if filter_incomplete:
+                        complete = False
+                        break
+                role.label = mapped_role
+        if complete:
+            result.append(prop)
+
     return result
 
 
@@ -238,7 +275,9 @@ def process_predicates(props, process_fn):
 
 
 def map_predicate(predicate, search, replace):
-    return re.sub(search, replace, predicate)
+    if search and replace:
+        return re.sub(search, replace, predicate)
+    return predicate
 
 
 def clean_role_labels(roles):
@@ -250,6 +289,13 @@ def clean_role_labels(roles):
             logger.warning('Unexpected role format: %s' % role.label)
             return False
         role.label = cleaned
+    return True
+
+
+def map_roles(roles, mappings):
+    if mappings:
+        for role in roles:
+            role.label = mappings.get(role.label, role.label)
     return True
 
 
@@ -300,15 +346,23 @@ def format_props(props):
 
 
 def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern=None, sort_cols=None, vn=False,
-                    filter_incomplete=False):
+                    filter_incomplete=False, mappings=None, semlink_mappings=None):
     props = read_props(propspath)
     logger.info('Read %d props' % len(props))
 
     props = sort_props(props, sort_cols)
+
     props = process_roles(props, clean_role_labels)
-    props = process_roles(props, lambda roles: extract_semlink_roles(roles, vn, filter_incomplete))
+    if not semlink_mappings:
+        props = process_roles(props, lambda roles: extract_semlink_roles(roles, vn, filter_incomplete))
     props = process_roles(props, fix_semlink_errors)
+    props = process_roles(props, lambda roles: map_roles(roles, mappings))
+
     props = process_predicates(props, lambda pred: map_predicate(pred, search_pattern, search_repl_pattern))
+
+    if semlink_mappings:
+        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete)
+
     props = sort_props(props, sort_cols)
 
     PropStats(props).write_all(outpath)
@@ -334,9 +388,11 @@ def options():
                         help='use default settings for processing SemLink data (remove pointers with PropBank core arguments, '
                              'change senses to VN)')
     parser.add_argument('--filter-incomplete', dest='filter_incomplete',
-                        action='store_true', help='Filter any incompletely mapped propositions in SemLink')
-    parser.add_argument('--vn', action='store_true', help='For SemLink vnbpprop.txt, extract VN roles')
-    parser.add_argument('--level', default='INFO', help='Logging level (e.g. INFO, DEBUG, etc.)')
+                        action='store_true', help='filter any incompletely mapped propositions in SemLink')
+    parser.add_argument('--vn', action='store_true', help='for SemLink vnbpprop.txt, extract VN roles')
+    parser.add_argument('--mappings', type=str, help='(optional) thematic role mappings JSON')
+    parser.add_argument('--semlink-mappings', dest='semlink_mappings', type=str, help='(optional) SemLink PB VN mappings XML')
+    parser.add_argument('--level', default='INFO', help='logging level (e.g. INFO, DEBUG, etc.)')
     parser.set_defaults(semlink=False)
     parser.set_defaults(vn=False)
     parser.set_defaults(filter_incomplete=False)
@@ -363,12 +419,21 @@ def main():
             else:
                 replace_pattern = SEMLINK_TO_PB
 
-    sort_cols = [int(col) for col in _opts.sort_cols.split(',')]
+    if _opts.mappings:
+        _opts.mappings = read_role_mappings_json(_opts.mappings)
+
+    sort_cols = [int(col) for col in _opts.sort_cols.split(',')] if _opts.sort_cols else []
     if not _opts.o:
         _opts.o = _opts.pb + '.out'
+
+    semlink_mappings = None
+    if _opts.semlink_mappings:
+        semlink_mappings = read_mappings_xml(_opts.semlink_mappings)
+
     transform_props(_opts.pb, outpath=_opts.o, search_pattern=search_pattern,
                     search_repl_pattern=replace_pattern, sort_cols=sort_cols, vn=_opts.vn,
-                    filter_incomplete=_opts.filter_incomplete)
+                    filter_incomplete=_opts.filter_incomplete,
+                    mappings=_opts.mappings, semlink_mappings=semlink_mappings)
 
 
 if __name__ == '__main__':
