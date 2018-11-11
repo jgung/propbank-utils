@@ -1,0 +1,22 @@
+{
+  "Recipient": "G1",
+  "Destination": "G1",
+  "Location": "G1",
+  "Source": "G1",
+  "Material": "G1",
+  "Beneficiary": "G1",
+  "Extent": "G2",
+  "Asset": "G2",
+  "Predicate": "G3",
+  "Attribute": "G3",
+  "Theme": "G3",
+  "Theme1": "G3",
+  "Theme2": "G3",
+  "Topic": "G3",
+  "Patient2": "G4",
+  "Product": "G4",
+  "Instrument": "G5",
+  "Cause": "G5",
+  "Experiencer": "G5",
+  "Actor2": "G5"
+}
