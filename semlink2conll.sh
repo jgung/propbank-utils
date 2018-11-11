@@ -36,7 +36,8 @@ checkdownload $SEMLINK.tar.gz https://verbs.colorado.edu/semlink/versions/$SEMLI
 
 SCRIPT_PATH="scripts/link_tbpb_vn.pl"
 
-python pb_process.py --pb $SEMLINK/vn-pb/vnpbprop.txt --semlink --filter-incomplete --vn --sort-columns 0,1,2 --o $SEMLINK/vnprop.txt
+echo "Creating train/valid/test split with VN roles and VN senses"
+python pb_process.py --pb $SEMLINK/vn-pb/vnpbprop.txt --semlink --filter-incomplete --vn --vncls --sort-columns 0,1,2 --o $SEMLINK/vnprop.txt
 
 python pb2conll.py --pb $SEMLINK/vnprop.txt --tb $PTB_DIR --o $SEMLINK/vnprops \
 --filter ".*WSJ/(0[2-9]|1[0-9]|2[01])/.*" --combined $SEMLINK/vn-train.txt --all --include-inputs --script $SCRIPT_PATH
@@ -45,6 +46,7 @@ python pb2conll.py --pb $SEMLINK/vnprop.txt --tb $PTB_DIR --o $SEMLINK/vnprops \
 python pb2conll.py --pb $SEMLINK/vnprop.txt --tb $PTB_DIR --o $SEMLINK/vnprops \
 --filter .*WSJ/23/.* --combined $SEMLINK/vn-test.txt --all --include-inputs --script $SCRIPT_PATH
 
+echo "Creating train/valid/test split with PB roles"
 python pb_process.py --pb $SEMLINK/vn-pb/vnpbprop.txt --semlink --filter-incomplete --sort-columns 0,1,2 --o $SEMLINK/pbprop.txt
 
 python pb2conll.py --pb $SEMLINK/pbprop.txt --tb $PTB_DIR --o $SEMLINK/pbprops \
@@ -53,3 +55,13 @@ python pb2conll.py --pb $SEMLINK/pbprop.txt --tb $PTB_DIR --o $SEMLINK/pbprops \
 --filter .*WSJ/24/.* --combined $SEMLINK/pb-valid.txt --all --include-inputs --script $SCRIPT_PATH
 python pb2conll.py --pb $SEMLINK/pbprop.txt --tb $PTB_DIR --o $SEMLINK/pbprops \
 --filter .*WSJ/23/.* --combined $SEMLINK/pb-test.txt --all --include-inputs --script $SCRIPT_PATH
+
+echo "Creating train/valid/test split with PB roles and VN senses"
+python pb_process.py --pb $SEMLINK/vn-pb/vnpbprop.txt --semlink --filter-incomplete --vncls --sort-columns 0,1,2 --o $SEMLINK/pbvnprop.txt
+
+python pb2conll.py --pb $SEMLINK/pbvnprop.txt --tb $PTB_DIR --o $SEMLINK/pbprops \
+--filter ".*WSJ/(0[2-9]|1[0-9]|2[01])/.*" --combined $SEMLINK/pbvn-train.txt --all --include-inputs --script $SCRIPT_PATH
+python pb2conll.py --pb $SEMLINK/pbvnprop.txt --tb $PTB_DIR --o $SEMLINK/pbprops \
+--filter .*WSJ/24/.* --combined $SEMLINK/pbvn-valid.txt --all --include-inputs --script $SCRIPT_PATH
+python pb2conll.py --pb $SEMLINK/pbvnprop.txt --tb $PTB_DIR --o $SEMLINK/pbprops \
+--filter .*WSJ/23/.* --combined $SEMLINK/pbvn-test.txt --all --include-inputs --script $SCRIPT_PATH

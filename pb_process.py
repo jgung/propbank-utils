@@ -125,6 +125,9 @@ def read_mappings_xml(mappings_xml):
             for role in argmap.getElementsByTagName("role"):
                 pbarg = role.attributes['pb-arg'].value
                 vntheta = role.attributes['vn-theta'].value
+                if not vntheta.strip():
+                    logger.warning("Empty SemLink pb-arg to vn-arg mapping for %s ARG%s" % (roleset, pbarg))
+                    continue
                 if pbarg in rolemap:
                     raise ValueError('Non deterministic mapping for {} arg {}'.format(lemma, pbarg))
                 rolemap[pbarg] = vntheta
@@ -148,7 +151,7 @@ def map_props(props, search_pattern, search_repl_pattern):
     return result
 
 
-def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, vn=True):
+def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, use_vnrole=True, use_vncls=True):
     result = []
     for prop in props:
         vnmappings = roleset_mappings.get(prop.predicate)
@@ -172,10 +175,10 @@ def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, vn=True):
                     if filter_incomplete:
                         complete = False
                         break
-                if vn:
+                if use_vnrole:
                     role.label = mapped_role
         if complete:
-            if vn:
+            if use_vncls:
                 prop.predicate = vnmapping.lemma + '.' + vnmapping.vncls
             result.append(prop)
 
@@ -348,7 +351,7 @@ def format_props(props):
     return result
 
 
-def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern=None, sort_cols=None, vn=False,
+def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern=None, sort_cols=None, vn=False, vncls=False,
                     filter_incomplete=False, mappings=None, semlink_mappings=None):
     props = read_props(propspath)
     logger.info('Read %d props' % len(props))
@@ -364,7 +367,7 @@ def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern
     props = process_predicates(props, lambda pred: map_predicate(pred, search_pattern, search_repl_pattern))
 
     if semlink_mappings:
-        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete, vn=vn)
+        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete, use_vnrole=vn, use_vncls=vncls)
 
     props = sort_props(props, sort_cols)
 
@@ -392,12 +395,14 @@ def options():
                              'change senses to VN)')
     parser.add_argument('--filter-incomplete', dest='filter_incomplete',
                         action='store_true', help='filter any incompletely mapped propositions in SemLink')
-    parser.add_argument('--vn', action='store_true', help='for SemLink vnbpprop.txt, extract VN roles')
     parser.add_argument('--mappings', type=str, help='(optional) thematic role mappings JSON')
     parser.add_argument('--semlink-mappings', dest='semlink_mappings', type=str, help='(optional) SemLink PB VN mappings XML')
+    parser.add_argument('--vn', action='store_true', help='for SemLink vnbpprop.txt, extract VN roles')
+    parser.add_argument('--vncls', action='store_true', help='for SemLink mappings, use VN senses instead of PB senses')
     parser.add_argument('--level', default='INFO', help='logging level (e.g. INFO, DEBUG, etc.)')
     parser.set_defaults(semlink=False)
     parser.set_defaults(vn=False)
+    parser.set_defaults(vncls=False)
     parser.set_defaults(filter_incomplete=False)
 
     if len(sys.argv) == 1:
@@ -417,7 +422,7 @@ def main():
         if not search_pattern:
             search_pattern = SEMLINK_PB_TO_VN
         if not replace_pattern:
-            if _opts.vn:
+            if _opts.vncls:
                 replace_pattern = SEMLINK_TO_VN
             else:
                 replace_pattern = SEMLINK_TO_PB
@@ -434,7 +439,7 @@ def main():
         semlink_mappings = read_mappings_xml(_opts.semlink_mappings)
 
     transform_props(_opts.pb, outpath=_opts.o, search_pattern=search_pattern,
-                    search_repl_pattern=replace_pattern, sort_cols=sort_cols, vn=_opts.vn,
+                    search_repl_pattern=replace_pattern, sort_cols=sort_cols, vn=_opts.vn, vncls=_opts.vncls,
                     filter_incomplete=_opts.filter_incomplete,
                     mappings=_opts.mappings, semlink_mappings=semlink_mappings)
 
