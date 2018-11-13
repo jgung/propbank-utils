@@ -25,6 +25,7 @@ CLEAN_ROLE = "^(ARGM-[a-zA-Z0-9]+|([a-zA-Z0-9]+)(?:\[([^\]]+)\])?).*$"  # e.g. A
 BRACKET_SPACE = "\[\s+\]|(?<=\[)\s+|\s+(?=\])"  # clean up extra whitespace within bracketed mapped VN roles
 
 CLEAN_MAPPING_ERRORS = " -by"  # 16:1-Agent -by --> 16:1-Agent-by
+COMBINED_ROLES_FORMAT = '%s$%s'  # ARG1$Theme
 
 
 def write_counts(outpath, counts):
@@ -151,7 +152,7 @@ def map_props(props, search_pattern, search_repl_pattern):
     return result
 
 
-def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, use_vnrole=True, use_vncls=True):
+def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, use_vnrole=True, use_vnpb=False, use_vncls=True):
     result = []
     for prop in props:
         vnmappings = roleset_mappings.get(prop.predicate)
@@ -175,7 +176,9 @@ def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, use_vnrol
                     if filter_incomplete:
                         complete = False
                         break
-                if use_vnrole:
+                if use_vnpb:
+                    role.label = COMBINED_ROLES_FORMAT % (match.group(1), mapped_role)
+                elif use_vnrole:
                     role.label = mapped_role
         if complete:
             if use_vncls:
@@ -320,14 +323,16 @@ def fix_semlink_errors(roles):
     return True
 
 
-def extract_semlink_roles(roles, vn, filter_incomplete):
+def extract_semlink_roles(roles, vn, vnpb, filter_incomplete):
     all_mapped = True
     for role in roles:
         match = re.search(CLEAN_ROLE, role.label)
         if not match.group(3) and bool(re.search(PB_CORE_ARGS, role.label)):
             all_mapped = False
         if match.group(3):
-            if vn:
+            if vnpb:
+                role.label = COMBINED_ROLES_FORMAT % (match.group(2), match.group(3))
+            elif vn:
                 role.label = match.group(3)  # e.g. "ARG1[Theme]" --> "Theme"
             else:
                 role.label = match.group(2)  # e.g. "ARG1[Theme]" --> "ARG1"
@@ -351,8 +356,8 @@ def format_props(props):
     return result
 
 
-def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern=None, sort_cols=None, vn=False, vncls=False,
-                    filter_incomplete=False, mappings=None, semlink_mappings=None):
+def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern=None, sort_cols=None, vn_roles=False,
+                    vnpb_roles=False, vncls=False, filter_incomplete=False, mappings=None, semlink_mappings=None):
     props = read_props(propspath)
     logger.info('Read %d props' % len(props))
 
@@ -360,14 +365,15 @@ def transform_props(propspath, outpath, search_pattern=None, search_repl_pattern
 
     props = process_roles(props, clean_role_labels)
     if not semlink_mappings:
-        props = process_roles(props, lambda roles: extract_semlink_roles(roles, vn, filter_incomplete))
+        props = process_roles(props, lambda roles: extract_semlink_roles(roles, vn_roles, vnpb_roles, filter_incomplete))
     props = process_roles(props, fix_semlink_errors)
     props = process_roles(props, lambda roles: map_roles(roles, mappings))
 
     props = process_predicates(props, lambda pred: map_predicate(pred, search_pattern, search_repl_pattern))
 
     if semlink_mappings:
-        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete, use_vnrole=vn, use_vncls=vncls)
+        props = map_roles_semlink(props, semlink_mappings, filter_incomplete=filter_incomplete, use_vnrole=vn_roles,
+                                  use_vnpb=vnpb_roles, use_vncls=vncls)
 
     props = sort_props(props, sort_cols)
 
@@ -397,11 +403,14 @@ def options():
                         action='store_true', help='filter any incompletely mapped propositions in SemLink')
     parser.add_argument('--mappings', type=str, help='(optional) thematic role mappings JSON')
     parser.add_argument('--semlink-mappings', dest='semlink_mappings', type=str, help='(optional) SemLink PB VN mappings XML')
-    parser.add_argument('--vn', action='store_true', help='for SemLink vnbpprop.txt, extract VN roles')
-    parser.add_argument('--vncls', action='store_true', help='for SemLink mappings, use VN senses instead of PB senses')
+    parser.add_argument('--vn', action='store_true', help='Extract VN roles instead of PB roles')
+    parser.add_argument('--vnpb', '--pbvn', dest='vnpb', action='store_true', help='Extract both PB and VN roles')
+    parser.add_argument('--vncls', action='store_true', help='When "--semlink-mappings" is provided, use VN classes instead of '
+                                                             'PB rolesets')
     parser.add_argument('--level', default='INFO', help='logging level (e.g. INFO, DEBUG, etc.)')
     parser.set_defaults(semlink=False)
     parser.set_defaults(vn=False)
+    parser.set_defaults(vnpb=False)
     parser.set_defaults(vncls=False)
     parser.set_defaults(filter_incomplete=False)
 
@@ -439,8 +448,8 @@ def main():
         semlink_mappings = read_mappings_xml(_opts.semlink_mappings)
 
     transform_props(_opts.pb, outpath=_opts.o, search_pattern=search_pattern,
-                    search_repl_pattern=replace_pattern, sort_cols=sort_cols, vn=_opts.vn, vncls=_opts.vncls,
-                    filter_incomplete=_opts.filter_incomplete,
+                    search_repl_pattern=replace_pattern, sort_cols=sort_cols, vn_roles=_opts.vn, vnpb_roles=_opts.vnpb,
+                    vncls=_opts.vncls, filter_incomplete=_opts.filter_incomplete,
                     mappings=_opts.mappings, semlink_mappings=semlink_mappings)
 
 
