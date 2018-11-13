@@ -7,11 +7,12 @@ function usage()
     echo "Download and convert SemLink data to VN roles and PB roles."
     echo "Requires PTB dataset from https://catalog.ldc.upenn.edu/ldc99t42."
     echo ""
-    echo "$program_name --ptb path/to/ptb [--roleset [vn|pb|both]] [--senses [vn|pb]]"
+    echo "$program_name --ptb path/to/ptb [--roleset [vn|pb|both]] [--senses [vn|pb]] [--brown path/to/brown.props]"
     echo -e "\t-h --help"
     echo -e "\t--ptb\tPath to treebank_3/parsed/mrg directory of Penn TreeBank -- LDC99T42"
     echo -e "\t--roleset\t(optional) type of roles to output ('pb', 'vn', or 'both'), 'vn' by default"
     echo -e "\t--senses\t(optional) type of senses to output ('pb' or 'vn'), 'vn' by default"
+    echo -e "\t--brown\t\t(optional) path to Brown corpus propositions"
 }
 
 roleset=vn
@@ -28,6 +29,11 @@ case ${key} in
     ;;
     -ptb|--ptb)
     ptb=$2
+    shift
+    shift
+    ;;
+    -brown|--brown)
+    brown=$2
     shift
     shift
     ;;
@@ -72,8 +78,6 @@ checkdownload() {
 checkdownload srlconll-1.1.tgz http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz
 checkdownload ${semlink}.tar.gz https://verbs.colorado.edu/semlink/versions/${semlink}.tar.gz
 
-script_path="scripts/link_tbpb_vn.pl"
-
 roles_opt='--vn'
 senses_opt='--vncls'
 if [[ ${senses} == 'pb' ]]; then
@@ -87,18 +91,33 @@ if [[ ${roleset} == 'both' ]]; then
 fi
 prefix="${senses}.${roleset}"
 
+output_path=${semlink}/${prefix}-prop.txt
+
 python pb_process.py --pb ${semlink}/vn-pb/vnpbprop.txt \
 --semlink --filter-incomplete \
 --sort-columns 0,1,2 \
---o ${semlink}/${prefix}-prop.txt \
+--o ${output_path} \
 ${roles_opt} \
 ${senses_opt}
 
-output_path=${semlink}/${prefix}-prop.txt
+python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --filter ".*WSJ/(0[2-9]|1[0-9]|2[01])/.*" \
+--combined ${semlink}/${prefix}-train.txt --all --include-inputs
+python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --filter .*WSJ/24/.* \
+--combined ${semlink}/${prefix}-valid.txt --all --include-inputs
+python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --filter .*WSJ/23/.* \
+--combined ${semlink}/${prefix}-test-wsj.txt --all --include-inputs
 
-python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --o ${semlink}/vnprops \
---filter ".*WSJ/(0[2-9]|1[0-9]|2[01])/.*" --combined ${semlink}/${prefix}-train.txt --all --include-inputs --script ${script_path}
-python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --o ${semlink}/vnprops \
---filter .*WSJ/24/.* --combined ${semlink}/${prefix}-valid.txt --all --include-inputs --script ${script_path}
-python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --o ${semlink}/vnprops \
---filter .*WSJ/23/.* --combined ${semlink}/${prefix}-test.txt --all --include-inputs --script ${script_path}
+if [[ -z ${brown} ]]; then
+    exit 0
+fi
+
+output_path=${semlink}/${prefix}-brown-prop.txt
+python pb_process.py --pb ${brown} \
+--semlink-mappings ${semlink}/vn-pb/type_map.xml \
+--filter-incomplete \
+--sort-columns 0,1,2 \
+--o ${output_path} \
+${roles_opt} \
+${senses_opt}
+
+python pb2conll.py --pb ${output_path} --tb ${ptb_dir} --combined ${semlink}/${prefix}-test-brown.txt --all --include-inputs

@@ -35,3 +35,38 @@ optional arguments:
   --all                include all role labels instead of filtering out
                        unexpected ones
 ```
+
+## Convert SemLink to CoNLL
+SemLink is distributed as standoff annotations with an unconventional format for VN and PB annotations. `pb_process.py` provides
+utilities for converting SemLink data to a more standard format, mapping standard propositions to VN roles/classes using
+SemLink mappings, etc.
+
+To convert [SemLink 1.1](https://verbs.colorado.edu/semlink/) to CoNLL format with the standard train/test/validation split,
+use the script `semlink2conll.sh`, which downloads SemLink and calls `pb_process.py` and `pb2conll.py`.
+
+To use this script, you must have already installed Perl modules provided in
+[srlconll-1.1.tgz](http://www.lsi.upc.edu/~srlconll/srlconll-1.1.tgz).
+
+```
+Download and convert SemLink data to VN roles and PB roles. Requires PTB dataset from https://catalog.ldc.upenn.edu/ldc99t42.
+
+./semlink2conll.sh --ptb path/to/ptb [--roleset [vn|pb|both]] [--senses [vn|pb]] [--brown path/to/brown.props]
+        -h --help
+        --ptb   Path to treebank_3/parsed/mrg directory of Penn TreeBank -- LDC99T42
+        --roleset       (optional) type of roles to output ('pb', 'vn', or 'both'), 'vn' by default
+        --senses        (optional) type of senses to output ('pb' or 'vn'), 'vn' by default
+        --brown         (optional) path to Brown corpus propositions
+
+```
+
+#### Example usage
+Create train/test/validation split w/ PropBank roles and VN senses, skipping any propositions that aren't fully mapped to VerbNet.
+```
+./semlink2conll.sh --ptb treebank_3/parsed/mrg --roleset pb --senses vn
+```
+
+Create train/test/validation split w/ VN roles and VN senses, skipping any propositions that aren't fully mapped to VerbNet.
+Perform the same processing on Brown corpus standoff PropBank annotations provided at data/prop.txt.
+```
+./semlink2conll.sh --ptb treebank_3/parsed/mrg --roleset vn --senses vn --brown data/prop.txt
+```
