@@ -49,7 +49,8 @@ def link_treebank_propbank(props_by_path,
                            combined=None,
                            noi=True,
                            path_filter=lambda x: True,
-                           all_roles=False):
+                           all_roles=False,
+                           pretty=False):
     if not output_dir:
         output_dir = treebank_dir
 
@@ -82,6 +83,8 @@ def link_treebank_propbank(props_by_path,
                             os.makedirs(directory)
                         with open(os.path.join(output_dir, filepath + '.props'), mode='wt') as outfile:
                             result = _combine_treebank(propfile.name, tbfile.name, script_path, noi=noi, all_roles=all_roles)
+                            if not pretty:
+                                result = re.sub(' +', ' ', result)
                             outfile.write(result)
                             if combined:
                                 combined.write(result)
@@ -102,8 +105,10 @@ def options():
     parser.add_argument('--combined', type=str, help='(optional) combined output path')
     parser.add_argument('--filter', type=str, help='(optional) path regex filter, e.g. ".*WSJ/(0[2-9]|1[0-9]|2[01])/.*" ')
     parser.add_argument('--all', action='store_true', help='include all role labels instead of filtering out unexpected ones')
+    parser.add_argument('--pretty', action='store_true', help='preserve output formatting instead of removing extra spaces')
     parser.set_defaults(noi=True)
     parser.set_defaults(all=False)
+    parser.set_defaults(pretty=False)
     if len(sys.argv) == 1:
         parser.print_help(sys.stderr)
         sys.exit(1)
@@ -124,7 +129,8 @@ def main():
         path_filter = filter_func
 
     link_treebank_propbank(_props_by_path, treebank_dir=_opts.tb, script_path=_opts.script, output_dir=_opts.o,
-                           combined=_opts.combined, noi=_opts.noi, path_filter=path_filter, all_roles=_opts.all)
+                           combined=_opts.combined, noi=_opts.noi, path_filter=path_filter, all_roles=_opts.all,
+                           pretty=_opts.pretty)
 
 
 if __name__ == '__main__':

@@ -36,7 +36,7 @@ optional arguments:
                        unexpected ones
 ```
 
-## Convert SemLink to CoNLL
+## Convert SemLink to CoNLL 2005 Train/Test/Validation
 SemLink is distributed as standoff annotations with an unconventional format for VN and PB annotations. `pb_process.py` provides
 utilities for converting SemLink data to a more standard format, mapping standard propositions to VN roles/classes using
 SemLink mappings, etc.
@@ -59,7 +59,7 @@ Download and convert SemLink data to VN roles and PB roles. Requires PTB dataset
 
 ```
 
-#### Example usage
+#### Examples
 Create train/test/validation split w/ PropBank roles and VN senses, skipping any propositions that aren't fully mapped to VerbNet.
 ```
 ./semlink2conll.sh --ptb treebank_3/parsed/mrg --roleset pb --senses vn
