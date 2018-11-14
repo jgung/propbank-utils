@@ -179,7 +179,7 @@ def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, use_vnrol
                 if use_vnpb:
                     role.label = COMBINED_ROLES_FORMAT % (match.group(0), mapped_role.capitalize())
                 elif use_vnrole:
-                    role.label = mapped_role
+                    role.label = mapped_role.capitalize()
         if complete:
             if use_vncls:
                 prop.predicate = vnmapping.lemma + '.' + vnmapping.vncls
@@ -311,9 +311,8 @@ def map_roles(roles, mappings):
 def fix_semlink_errors(roles):
     for role in roles:
         label = role.label
-        if label == "announcement":  # erroneous mapping in Semlink 1.0/1.1
-            label = "Topic"
-        elif label.startswith("ARGM-"):
+        label = label.replace("announcement", "Topic")  # erroneous mapping in Semlink 1.0/1.1
+        if label.startswith("ARGM-"):
             if label == "ARGM-TM":
                 label = "ARGM-TMP"
             if len(label) != 8:
