@@ -177,7 +177,7 @@ def map_roles_semlink(props, roleset_mappings, filter_incomplete=True, use_vnrol
                         complete = False
                         break
                 if use_vnpb:
-                    role.label = COMBINED_ROLES_FORMAT % (match.group(1), mapped_role)
+                    role.label = COMBINED_ROLES_FORMAT % (match.group(0), mapped_role)
                 elif use_vnrole:
                     role.label = mapped_role
         if complete:
