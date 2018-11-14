@@ -37,9 +37,13 @@ optional arguments:
 ```
 
 ## Convert SemLink to CoNLL 2005 Train/Test/Validation
-SemLink is distributed as standoff annotations with an unconventional format for VN and PB annotations. `pb_process.py` provides
-utilities for converting SemLink data to a more standard format, mapping standard propositions to VN roles/classes using
-SemLink mappings, etc.
+SemLink is distributed as standoff annotations with an unconventional format for VN and PB annotations:
+```
+wsj/00/wsj_0004.mrg    6  10 auto     consider.01;VN=29.1       p---p 0:1,3:1-ARG1[Theme] 10:0-rel 11:1-ARG0[Agent]-by 13:2-ARG2
+```
+
+`pb_process.py` provides utilities for converting SemLink data to a more standard format, mapping standard propositions to VN
+roles/classes using SemLink mappings, and filtering out incompletely mapped propositions.
 
 To convert [SemLink 1.1](https://verbs.colorado.edu/semlink/) to CoNLL format with the standard train/test/validation split,
 use the script `semlink2conll.sh`, which downloads SemLink and calls `pb_process.py` and `pb2conll.py`.
